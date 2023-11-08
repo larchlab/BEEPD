@@ -23,6 +23,7 @@ from outcome_models import BertLongForSequenceClassification, LitAugPredictorBie
 from outcome_pred_utils import CUDA_AVAILABLE, make_dict_vals_cuda_if_available, make_tensor_cuda_if_available
 
 FloatTensorConstructor = torch.cuda.FloatTensor if CUDA_AVAILABLE else torch.FloatTensor
+MAP_LOCATION = None if CUDA_AVAILABLE else torch.device("cpu")
 
 def create_long_model(init_model, save_model_to, attention_window, max_pos, num_labels):
     config = BertConfig.from_pretrained(init_model,
@@ -488,7 +489,7 @@ def run(train_path, dev_path, test_path, lit_ranks, lit_file, init_model,
         rerank_model.resize_token_embeddings(len(rerank_tokenizer))
         if rerank_checkpoint is not None and do_train:  # Only load pretrained reranker if training is to be carried out
             rerank_model.load_state_dict(
-                torch.load(rerank_checkpoint))  # Otherwise full model will contain reranker weights too
+                torch.load(rerank_checkpoint, map_location=MAP_LOCATION))  # Otherwise full model will contain reranker weights too
     if use_pico:
         special_tokens_dict = {'additional_special_tokens': ['<PAR>', '</PAR>', '<INT>', '</INT>', '<OUT>', '</OUT>']}
         num_added_toks = tokenizer.add_special_tokens(special_tokens_dict)
@@ -618,13 +619,13 @@ def run(train_path, dev_path, test_path, lit_ranks, lit_file, init_model,
     if do_test:
         if checkpoint is not None:
             if 'checkpoint' in checkpoint:
-                full_checkpoint = torch.load(checkpoint)
+                full_checkpoint = torch.load(checkpoint, map_location=MAP_LOCATION)
                 model.load_state_dict(full_checkpoint['model_state_dict'])
             else:
-                model.load_state_dict(torch.load(checkpoint))
+                model.load_state_dict(torch.load(checkpoint, map_location=MAP_LOCATION))
                 print('Loaded checkpoint')
         else:
-            model.load_state_dict(torch.load(os.path.join(out_dir, 'best_model.pt')))
+            model.load_state_dict(torch.load(os.path.join(out_dir, 'best_model.pt'), map_location=MAP_LOCATION))
         test(model, test_batches, dump_test_preds, out_dir, epoch="end", step="test",
              class_weights=dataset.class_weights, strategy=strategy)
 
