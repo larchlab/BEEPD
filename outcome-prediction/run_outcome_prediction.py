@@ -20,6 +20,9 @@ from transformers import AdamW, BertConfig, BertTokenizer, BertForSequenceClassi
         AutoTokenizer, AutoConfig, AutoModel, BertTokenizerFast, set_seed, get_linear_schedule_with_warmup
 from transformers.models.longformer.modeling_longformer import LongformerSelfAttention
 from outcome_models import BertLongForSequenceClassification, LitAugPredictorBienc, LitAugPredictorCrossenc, L2RLitAugPredictorBienc
+from outcome_pred_utils import CUDA_AVAILABLE, make_dict_vals_cuda_if_available, make_tensor_cuda_if_available
+
+FloatTensorConstructor = torch.cuda.FloatTensor if CUDA_AVAILABLE else torch.FloatTensor
 
 def create_long_model(init_model, save_model_to, attention_window, max_pos, num_labels):
     config = BertConfig.from_pretrained(init_model,
@@ -70,7 +73,7 @@ def create_long_model(init_model, save_model_to, attention_window, max_pos, num_
 def train(model, train_data, dev_data, out_dir, epochs, lr, class_weights, acc_steps, strategy,
           use_warmup, warmup_steps, stop_on_roc, dump_test_preds):
     # print('Dropout default" {}'.format(model.config.hidden_dropout_prob))
-    weights = torch.cuda.FloatTensor([x[1] for x in list(sorted(class_weights.items(), key=lambda x:x[0]))])
+    weights = FloatTensorConstructor([x[1] for x in list(sorted(class_weights.items(), key=lambda x:x[0]))])
     weighted_ce_loss = nn.CrossEntropyLoss(weight=weights)
     if 'vote' in strategy:
         weighted_ce_loss = nn.NLLLoss(weight=weights)
@@ -96,16 +99,17 @@ def train(model, train_data, dev_data, out_dir, epochs, lr, class_weights, acc_s
         num_batches = len(train_data)
         num_train_examples = num_batches * batch_size
         for batch in train_data:
-            gpu_batch = {x:y.cuda() for x,y in batch.items()
+            gpu_batch = {x:y for x,y in batch.items()
                          if x not in ['ehr_id', 'pubmed_docs', 'pubmed_doc_weights',
                                       'ehr_rerank_tokens', 'pubmed_doc_ids']}
+            gpu_batch = make_dict_vals_cuda_if_available(gpu_batch)
             if 'pubmed_docs' in batch:
                 gpu_batch['pubmed_docs'] = batch['pubmed_docs']
                 gpu_batch['pubmed_doc_weights'] = batch['pubmed_doc_weights']
             if 'pubmed_doc_ids' in batch:
                 gpu_batch['pubmed_doc_ids'] = batch['pubmed_doc_ids']
             if 'ehr_rerank_tokens' in batch:
-                gpu_batch['ehr_rerank_tokens'] = {x:y.cuda() for x,y in batch['ehr_rerank_tokens'].items()}
+                gpu_batch['ehr_rerank_tokens'] = make_dict_vals_cuda_if_available(batch['ehr_rerank_tokens'])
             outputs = model(**gpu_batch)
             logits = outputs[1]
             wloss = weighted_ce_loss(logits, gpu_batch["labels"])
@@ -162,7 +166,7 @@ def test(model, dev_data, dump_test_preds, out_dir, epoch, step,
     with torch.no_grad():
         model.eval()
         unique_labels = list(class_weights.keys())
-        weights = torch.cuda.FloatTensor([x[1] for x in list(sorted(class_weights.items(), key=lambda x:x[0]))])
+        weights = FloatTensorConstructor([x[1] for x in list(sorted(class_weights.items(), key=lambda x:x[0]))])
         weighted_ce_loss = nn.CrossEntropyLoss(weight=weights)
         if 'vote' in strategy:
             weighted_ce_loss = nn.NLLLoss(weight=weights)
@@ -174,14 +178,15 @@ def test(model, dev_data, dump_test_preds, out_dir, epoch, step,
         all_ids = []
         all_pred_probs_dump = []
         for i, batch in enumerate(dev_data):
-            gpu_batch = {x:y.cuda() for x,y in batch.items() if x not in ['ehr_id', 'pubmed_docs', 'pubmed_doc_weights', 'ehr_rerank_tokens', 'pubmed_doc_ids']}
+            gpu_batch = {x:y for x,y in batch.items() if x not in ['ehr_id', 'pubmed_docs', 'pubmed_doc_weights', 'ehr_rerank_tokens', 'pubmed_doc_ids']}
+            gpu_batch = make_dict_vals_cuda_if_available(gpu_batch)
             if 'pubmed_docs' in batch:
                 gpu_batch['pubmed_docs'] = batch['pubmed_docs']
                 gpu_batch['pubmed_doc_weights'] = batch['pubmed_doc_weights']
             if 'pubmed_doc_ids' in batch:
                 gpu_batch['pubmed_doc_ids'] = batch['pubmed_doc_ids']
             if 'ehr_rerank_tokens' in batch:
-                gpu_batch['ehr_rerank_tokens'] = {x:y.cuda() for x,y in batch['ehr_rerank_tokens'].items()}
+                gpu_batch['ehr_rerank_tokens'] = make_dict_vals_cuda_if_available(batch['ehr_rerank_tokens'])
             outputs = model(**gpu_batch)
             logits = outputs[1]
             all_preds += torch.argmax(logits, dim=1).detach().cpu().numpy().tolist()
@@ -503,7 +508,7 @@ def run(train_path, dev_path, test_path, lit_ranks, lit_file, init_model,
                                             query_proj)
         if query_loss is not None:
             model.query_loss = query_loss
-    model = model.cuda()
+    model = make_tensor_cuda_if_available(model)
 
     # print('Initialized longformer model with pretrained LM...')
 

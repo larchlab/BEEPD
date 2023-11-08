@@ -7,7 +7,9 @@ import torch.nn as nn
 from dataclasses import dataclass, field
 from transformers import BertForSequenceClassification
 from transformers.models.longformer.modeling_longformer import LongformerSelfAttention
+from outcome_pred_utils import CUDA_AVAILABLE, make_dict_vals_cuda_if_available, make_tensor_cuda_if_available
 
+FloatTensorConstructor = torch.cuda.FloatTensor if CUDA_AVAILABLE else torch.FloatTensor
 
 class BertLongSelfAttention(LongformerSelfAttention):
 
@@ -67,7 +69,7 @@ class LitAugPredictorCrossenc(nn.Module):
         if 'vote' in self.strategy:
             prob_matrices = []
             for doc_batch in pubmed_docs:
-                doc_batch = {x:y.cuda() for x,y in doc_batch.items()}
+                doc_batch = make_dict_vals_cuda_if_available(doc_batch)
                 cur_logits = self.bert_model(**doc_batch)[0]
                 cur_logits_softmax = self.softmax(cur_logits)
                 prob_matrices.append(cur_logits_softmax)
@@ -79,9 +81,9 @@ class LitAugPredictorCrossenc(nn.Module):
                     averaged_probs = torch.mean(torch.stack(prob_matrices), dim=0)
                 else:
                     weighted_matrices = []
-                    total_weight = torch.zeros(prob_matrices[0].size()).cuda()
+                    total_weight = make_tensor_cuda_if_available(torch.zeros(prob_matrices[0].size()))
                     for prob_matrix, weights in zip(prob_matrices, pubmed_doc_weights):
-                        weights = torch.cuda.FloatTensor(weights).unsqueeze(1).repeat(1, self.bert_config.num_labels)
+                        weights = FloatTensorConstructor(weights).unsqueeze(1).repeat(1, self.bert_config.num_labels)
                         weighted_matrices.append(weights * prob_matrix)
                         total_weight += weights
                     weighted_matrices = [x/total_weight for x in weighted_matrices]
@@ -91,7 +93,7 @@ class LitAugPredictorCrossenc(nn.Module):
         if self.strategy == 'average':
             rep_list = []
             for doc_batch in pubmed_docs:
-                doc_batch = {x:y.cuda() for x,y in doc_batch.items()}
+                doc_batch = make_dict_vals_cuda_if_available(doc_batch)
                 cur_outputs = self.bert_model.bert(**doc_batch)[1]   # 0 - last state, 1 - pooled output
                 rep_list.append(cur_outputs)
             final_lit_rep = torch.mean(torch.stack(rep_list), dim=0)
@@ -99,11 +101,11 @@ class LitAugPredictorCrossenc(nn.Module):
             return (None, logits)
         if self.strategy == 'weightaverage':
             rep_list = []
-            total_weight = torch.zeros((input_ids.size()[0], self.bert_config.hidden_size)).cuda()
+            total_weight = make_tensor_cuda_if_available(torch.zeros((input_ids.size()[0], self.bert_config.hidden_size)))
             for doc_batch, weights in zip(pubmed_docs, pubmed_doc_weights):
-                doc_batch = {x:y.cuda() for x,y in doc_batch.items()}
+                doc_batch = make_dict_vals_cuda_if_available(doc_batch)
                 cur_outputs = self.bert_model.bert(**doc_batch)[1]
-                weights = torch.cuda.FloatTensor(weights).unsqueeze(1).repeat(1, self.bert_config.hidden_size)
+                weights = FloatTensorConstructor(weights).unsqueeze(1).repeat(1, self.bert_config.hidden_size)
                 rep_list.append(weights * cur_outputs)
                 total_weight += weights
             rep_list = [x/total_weight for x in rep_list]
@@ -158,9 +160,10 @@ class LitAugPredictorBienc(nn.Module):
             pubmed_docs = pubmed_docs[:50]
         # print(len(pubmed_docs))
         if len(pubmed_docs) == 0:
-            lit_reps.append(torch.zeros(note_reps.size()).cuda())
+            zero_doc = make_tensor_cuda_if_available(torch.zeros(note_reps.size()))
+            lit_reps.append(zero_doc)
         for doc_batch in pubmed_docs:
-            doc_batch = {x:y.cuda() for x,y in doc_batch.items()}
+            doc_batch = make_dict_vals_cuda_if_available(doc_batch)
             cur_outputs = self.bert_model.bert(**doc_batch)
             lit_reps.append(cur_outputs[1])
         if self.strategy == 'average':
@@ -169,10 +172,10 @@ class LitAugPredictorBienc(nn.Module):
             logits = self.predictor(final_rep)
             return (None, logits)
         if self.strategy == 'weightaverage':
-            total_lit_rep = torch.zeros(lit_reps[0].size()).cuda()
-            total_weight = torch.zeros((input_ids.size()[0], self.bert_config.hidden_size)).cuda()
+            total_lit_rep = make_tensor_cuda_if_available(torch.zeros(lit_reps[0].size()))
+            total_weight = make_tensor_cuda_if_available(torch.zeros((input_ids.size()[0], self.bert_config.hidden_size)))
             for cur_lit_rep, weights in zip(lit_reps, pubmed_doc_weights):
-                weights = torch.cuda.FloatTensor(weights).unsqueeze(1).repeat(1, self.bert_config.hidden_size)
+                weights = FloatTensorConstructor(weights).unsqueeze(1).repeat(1, self.bert_config.hidden_size)
                 total_weight += weights
                 total_lit_rep += (weights * cur_lit_rep)
             if torch.sum(total_weight).item() != 0.0:
@@ -195,9 +198,9 @@ class LitAugPredictorBienc(nn.Module):
                     averaged_probs = torch.mean(torch.stack(prob_matrices), dim=0)
                 else:
                     weighted_matrices = []
-                    total_weight = torch.zeros(prob_matrices[0].size()).cuda()
+                    total_weight = make_tensor_cuda_if_available(torch.zeros(prob_matrices[0].size()))
                     for prob_matrix, weights in zip(prob_matrices, pubmed_doc_weights):
-                        weights = torch.cuda.FloatTensor(weights).unsqueeze(1).repeat(1, self.output_size)
+                        weights = FloatTensorConstructor(weights).unsqueeze(1).repeat(1, self.output_size)
                         weighted_matrices.append(weights * prob_matrix)
                         total_weight += weights
                     weighted_matrices = [x/total_weight for x in weighted_matrices if torch.sum(total_weight).item() != 0.0]
@@ -268,7 +271,7 @@ class L2RLitAugPredictorBienc(nn.Module):
                 note_question_outputs = torch.mean(note_question_outputs.permute(1,0,2), dim=1)
         if hasattr(self, 'query_loss'):
             if self.query_loss == 'pred':
-                empty_lit_reps = torch.zeros(note_question_outputs.size()).cuda()
+                empty_lit_reps = make_tensor_cuda_if_available(torch.zeros(note_question_outputs.size()))
                 note_question_lit_reps = torch.cat([note_question_outputs, empty_lit_reps], dim=1)
                 note_question_probs = self.predictor(note_question_lit_reps)
                 retrieval_loss = nn.CrossEntropyLoss()(note_question_probs, labels)
@@ -279,7 +282,7 @@ class L2RLitAugPredictorBienc(nn.Module):
         # note_lit_sim = torch.inner(note_question_rep_repeat, pubmed_doc_embeds)
         # note_lit_sim = -1 * torch.cdist(note_question_reps, pubmed_doc_embeds)
         # note_lit_sim = note_lit_sim.squeeze(1)
-        corrected_note_lit_sim = torch.FloatTensor(np.nan_to_num(note_lit_sim.detach().cpu().numpy(), nan=-1.1)).cuda()
+        corrected_note_lit_sim = make_tensor_cuda_if_available(torch.FloatTensor(np.nan_to_num(note_lit_sim.detach().cpu().numpy(), nan=-1.1)))
         top_doc_scores, top_doc_inds = torch.topk(corrected_note_lit_sim, self.topk, dim=1)  # Should break graph here
         if pubmed_doc_labels is not None:
             max_sim_array = torch.max(note_lit_sim.detach(), dim=1)[0].unsqueeze(-1)
@@ -311,13 +314,13 @@ class L2RLitAugPredictorBienc(nn.Module):
             cur_doc_inds = top_doc_inds[i,:].detach().cpu().numpy().tolist()
             cur_args = (([pubmed_docs[i][0][0][x] for x in cur_doc_inds], None))
             cur_doc_input = self.tokenizer(*cur_args, padding='max_length', max_length=512, truncation=True, return_tensors='pt')
-            cur_doc_input = {k:v.cuda() for k,v in cur_doc_input.items()}
+            cur_doc_input = make_dict_vals_cuda_if_available(cur_doc_input)
             # print(cur_doc_input)
             # print(cur_doc_inds)
             # cur_doc_input = {k:torch.index_select(v.cuda(), 0, cur_doc_inds) for k,v in pubmed_docs[i].items()}
             cur_outputs = self.bert_model.bert(**cur_doc_input)[1]
             if split == 'test' and torch.sum(torch.isnan(cur_outputs)) > 0:
-                cur_outputs = torch.FloatTensor(np.nan_to_num(cur_outputs.detach().cpu().numpy(), nan=0)).cuda()
+                cur_outputs = make_tensor_cuda_if_available(torch.FloatTensor(np.nan_to_num(cur_outputs.detach().cpu().numpy(), nan=0)))
             if self.strategy == 'average':
                 final_lit_rep = torch.mean(cur_outputs, dim=0).unsqueeze(0)
                 final_rep = torch.cat([note_reps[i,:,:], final_lit_rep], dim=1)
