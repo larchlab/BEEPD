@@ -4,6 +4,8 @@ This repository contains code to run the BEEP (Biomedical Evidence Enhanced Pred
 ## Code Setup
 This code was developed in python 3.8 using the libraries listed in environment.yml. The easiest way to run this code is to set up a conda environment using the .yml file via the following command:
 
+NOTE: I (Izzy) had to use a significantly different set of package versions to create the env on an Apple Silicon MacOS laptop with Python 3.8.18. You can find my alternate package versions in environment_macos.yml, if you're trying to build for a similar environment.
+
 ```conda env create -f environment.yml```
 
 Activate the conda environment using the command: ```conda activate beep-env```
