@@ -625,6 +625,7 @@ def run(train_path, dev_path, test_path, lit_ranks, lit_file, init_model,
                 full_checkpoint = torch.load(checkpoint, map_location=MAP_LOCATION)
                 # For some reason this key is unexpected...
                 full_checkpoint.pop("bert_model.bert.embeddings.position_ids", None)
+                full_checkpoint.pop("bert.embeddings.position_ids", None)
                 model.load_state_dict(full_checkpoint)
                 print('Loaded checkpoint')
         else:

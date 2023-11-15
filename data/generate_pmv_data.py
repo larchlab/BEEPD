@@ -4,6 +4,7 @@ import pickle
 import os
 
 admnote_folder = sys.argv[1]
+last_arg = sys.argv[-1]
 
 note_texts = {}
 for file in os.listdir(admnote_folder):
@@ -26,6 +27,10 @@ dev_writer.writerow(['id', 'text', 'label'])
 test_writer.writerow(['id', 'text', 'label'])
 
 for note in pmv_labels:
+    if note not in note_texts:
+        if last_arg != "--quiet":
+            print(f"WARNING: HADM_ID {note} not found in inputs.")
+        continue
     if pmv_labels[note][-1] == 'train':
         train_writer.writerow([note, note_texts[note], pmv_labels[note][0]])
     if pmv_labels[note][-1] == 'val':
