@@ -138,46 +138,6 @@ class PredictionCalculator:
             metric_fn()
         self.decision_threshold = opt_threshold
 
-    def calc_confusion_matrix(self):
-        """ 
-        
-        """
-
-    def calc_precision(self):
-        """
-        
-        """
-
-    def calc_recall(self):
-        """
-        
-        """
-    
-    def calc_f1(self) -> Dict[str, float]:
-        """ Calc f1 over self.curr_df. I don't like how I'm doing this rn, I want something more generalizable
-        so I don't need to call different functions with only slightly variable arguments. The main thing is that
-        I want to have a good way of separating by the non/binary cases, and non/thresholded cases
-
-        Returns:
-            Dict[str, float]: Dictionary mapping metric names to metric values
-        
-        """
-        return {
-            f"f1_wrt_{self.pos_label}": f1_score(self.curr_df[self.true_label_col], self.curr_df[self.pred_probs_col], pos_label=self.pos_label),
-            "f1_micro": f1_score(self.curr_df[self.true_label_col], self.curr_df[self.pred_probs_col], average="micro"),
-            "f1_macro": f1_score(self.curr_df[self.true_label_col], self.curr_df[self.pred_probs_col], average="micro"),
-        }
-
-    def calc_auc(self):
-        """
-        
-        """
-
-    def calc_mcc(self):
-        """ Calculate the Matthews Correlation Coefficient
-        
-        """
-
     def _check_and_set_threshold(self):
         """ Check whether a threshold column or value exists; set them if they don't 
         
