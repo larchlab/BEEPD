@@ -205,6 +205,9 @@ def test(model, dev_data, dump_test_preds, out_dir, epoch, step,
     if not return_loss and dump_test_preds:   # return_loss flag is not used for the test data
         pickle.dump(prediction_dict, open(os.path.join(out_dir, 'test_predictions.pkl'), 'wb'))
         pickle.dump(pred_prob_dict, open(os.path.join(out_dir, 'test_probabilities.pkl'), 'wb'))
+    # Izzy NOTE: I'm writing info to a df pkl rather than directly integrating the calculator for now
+    df = pd.DataFrame({"HADM_ID": all_ids, "true_labels": all_labels, "pred_probs": all_pred_probs})
+    df.to_pickle("/Users/chaiken/research/data/testing_inputs/outcome_prediction_res.pkl")
     metrics_dict = compute_classification_metrics(all_preds, all_pred_probs, all_labels, epoch, step, out_dir)
     dev_loss /= len(dev_data)
     print('Validation loss after epoch {}: {}'.format(epoch, dev_loss))
