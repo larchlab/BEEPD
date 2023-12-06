@@ -76,7 +76,7 @@ def create_hadm_id_to_demographics_sheet(hadm_ids: pd.Series, admission_info_tab
         pd.DataFrame: DF containing columns corresponding to HADM_ID and the demographic info
     
     """
-    filtered = pd.merge(hadm_ids, admission_info_table, left_on="id", right_on="HADM_ID", how="inner")
+    filtered = pd.merge(hadm_ids, admission_info_table, left_on="HADM_ID", right_on="HADM_ID", how="inner")
     filtered["AGE"] = filtered.apply(get_age, axis=1)
     return filtered[["HADM_ID", "SUBJECT_ID", "AGE", "GENDER", "ETHNICITY", "LANGUAGE", "INSURANCE"]]
 
@@ -87,8 +87,9 @@ if __name__ == "__main__":
     data_dir = pathlib.Path(args.data_dir)
     mimic_dir = pathlib.Path(args.mimic_dir)
     outfile = pathlib.Path(args.outfile)
-    hadm_ids = get_hadm_ids(data_dir)
+    # hadm_ids = get_hadm_ids(data_dir)
     admission_info_table = load_mimic_info(mimic_dir)
+    hadm_ids = admission_info_table["HADM_ID"]
     demographics_sheet = create_hadm_id_to_demographics_sheet(hadm_ids, admission_info_table)
     if outfile is not None:
         demographics_sheet.to_csv(outfile, index=False)

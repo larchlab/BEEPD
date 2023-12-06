@@ -81,3 +81,13 @@ def calc_all_metrics(df: pd.DataFrame, truth_col, prob_col, pred_col, class_list
             raise ValueError(f"Metric '{metric_name}' has bad 'multiclass' value {multiclass}.")
 
     return metric_values_dict
+
+def calc_cross_group_metrics(df: pd.DataFrame, truth_col, prob_col, pred_col, demographic_col, demographic_group, pos_class=1):
+    """ Calculate cross-group fairness metrics. This needs to be a different function because the basic calc_all_metrics doesn't do demographic filtering
+    Right now, this function only calculates cross
+
+    """
+    curr_group_pos = ((df[demographic_col] == demographic_group) & (df[truth_col] == pos_class))
+    other_group_neg = ((df[demographic_col] != demographic_group) & (df[truth_col] != pos_class))
+    sub_df = df[curr_group_pos | other_group_neg]
+    return roc_auc_score(sub_df[truth_col], np.stack(sub_df[prob_col].values)[:,1])

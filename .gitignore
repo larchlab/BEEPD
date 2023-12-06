@@ -3,3 +3,5 @@ __pycache__/
 models/
 *.csv
 mechanical_ventilation/
+*.pkl
+intermediate_products/

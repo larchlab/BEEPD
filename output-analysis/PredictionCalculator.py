@@ -7,7 +7,7 @@ import pandas as pd
 from sklearn.metrics import f1_score, matthews_corrcoef
 from typing import Dict, List, Any, Optional
 
-from metrics_utils import calc_all_metrics
+from metrics_utils import calc_all_metrics, calc_cross_group_metrics
 # Want to write code to create DF containing HADM_ID, true label, predicted label/probabilities array, then write functions
 # over this DF, rather than doing infinite ad hoc things. Maybe make a PredictionsCalculator class that takes in
 # this info, as well as list of classes, threshold, etc.
@@ -82,9 +82,12 @@ class PredictionCalculator:
                         bootstrap_sample = self.create_bootstrap_sample(demographic_df)
                         if not results_dict:
                             results_dict = {metric_name: [metric_val] for metric_name, metric_val in self.calc_metrics(bootstrap_sample).items()}
+                            whole_df_bootstrap = self.create_bootstrap_sample(self.results_df)
+                            results_dict["xgroup_auroc_wrt_1"] = [calc_cross_group_metrics(whole_df_bootstrap, self.true_label_col, self.pred_probs_col, self.pred_label_col, demographics_col, demographic_val)]
                         else:
                             for metric_name, metric_val in self.calc_metrics(bootstrap_sample).items():
                                 results_dict[metric_name].append(metric_val)
+                                results_dict["xgroup_auroc_wrt_1"].append(calc_cross_group_metrics(whole_df_bootstrap, self.true_label_col, self.pred_probs_col, self.pred_label_col, demographics_col, demographic_val))
                     # compute statistics for confidence intervals
                     for metric_name, metric_values in results_dict.items():
                         d = {
@@ -138,7 +141,7 @@ class PredictionCalculator:
             col_to_bin (str): the column to bin using binning_fn
             binning_fn (str): the function used to bin col_to_bin
         """
-        self.results_df[col_to_bin].apply(binning_fn)
+        self.results_df[col_to_bin] = self.results_df[col_to_bin].apply(binning_fn)
 
     def write_csv(self, outfile: str):
         """ Write the core results df to a CSV file

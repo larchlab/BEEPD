@@ -163,7 +163,7 @@ def train(model, train_data, dev_data, out_dir, epochs, lr, class_weights, acc_s
 
 
 def test(model, dev_data, dump_test_preds, out_dir, epoch, step,
-         return_loss=False, class_weights=None, strategy='average'):
+         return_loss=False, class_weights=None, strategy='average', predictions_file=''):
     with torch.no_grad():
         model.eval()
         unique_labels = list(class_weights.keys())
@@ -206,8 +206,9 @@ def test(model, dev_data, dump_test_preds, out_dir, epoch, step,
         pickle.dump(prediction_dict, open(os.path.join(out_dir, 'test_predictions.pkl'), 'wb'))
         pickle.dump(pred_prob_dict, open(os.path.join(out_dir, 'test_probabilities.pkl'), 'wb'))
     # Izzy NOTE: I'm writing info to a df pkl rather than directly integrating the calculator for now
-    df = pd.DataFrame({"HADM_ID": all_ids, "true_labels": all_labels, "pred_probs": all_pred_probs})
-    df.to_pickle("/Users/chaiken/research/data/testing_inputs/outcome_prediction_res.pkl")
+    if predictions_file:
+        df = pd.DataFrame({"HADM_ID": all_ids, "true_labels": all_labels, "pred_probs": all_pred_probs})
+        df.to_pickle(predictions_file)
     metrics_dict = compute_classification_metrics(all_preds, all_pred_probs, all_labels, epoch, step, out_dir)
     dev_loss /= len(dev_data)
     print('Validation loss after epoch {}: {}'.format(epoch, dev_loss))
@@ -401,7 +402,7 @@ def run(train_path, dev_path, test_path, lit_ranks, lit_file, init_model,
         do_train, do_test, checkpoint, attention_window, max_pos,
         batch_size, lr, epochs, seed, accumulation_steps, num_top_docs, strategy, enc_strategy,
         use_warmup, warmup_steps, stop_on_roc, dump_test_preds, use_pico, doc_embeds, l2r_top_docs,
-        outcome, retrieval_labels, query_proj, query_loss):
+        outcome, retrieval_labels, query_proj, query_loss, predictions_file):
 
     assert accumulation_steps % batch_size == 0, "accumulation_steps must be a multiple of batch_size"
     if longmodel_dir is not None and not os.path.exists(longmodel_dir):
@@ -634,7 +635,7 @@ def run(train_path, dev_path, test_path, lit_ranks, lit_file, init_model,
         else:
             model.load_state_dict(torch.load(os.path.join(out_dir, 'best_model.pt'), map_location=MAP_LOCATION))
         test(model, test_batches, dump_test_preds, out_dir, epoch="end", step="test",
-             class_weights=dataset.class_weights, strategy=strategy)
+             class_weights=dataset.class_weights, strategy=strategy, predictions_file=predictions_file)
 
 
 if __name__ == '__main__':
@@ -652,6 +653,7 @@ if __name__ == '__main__':
     parser.add_argument('--rerank_checkpoint', type=str, action='store', help='Checkpoint to load reranker weights from')
     parser.add_argument('--longmodel_dir', type=str, action='store', help='Path to dump longformer version of model')
     parser.add_argument('--out_dir', type=str, action='store', required=True, help='Provide path to directory to store outputs')
+    parser.add_argument('--predictions_file', type=str, action='store', default='', help='Path to file to write predictions DF')
     parser.add_argument('--do_train', action='store_true', default=False, help='Specify if training should be performed')
     parser.add_argument('--do_test', action='store_true', default=False, help='Specify if evaluation on test data should be performed')
     parser.add_argument('--checkpoint', type=str, action='store', help='Path to checkpoint to load model weights from')
