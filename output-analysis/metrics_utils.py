@@ -84,7 +84,7 @@ def calc_all_metrics(df: pd.DataFrame, truth_col, prob_col, pred_col, class_list
 
 def calc_cross_group_metrics(df: pd.DataFrame, truth_col, prob_col, pred_col, demographic_col, demographic_group, pos_class=1):
     """ Calculate cross-group fairness metrics. This needs to be a different function because the basic calc_all_metrics doesn't do demographic filtering
-    Right now, this function only calculates cross
+    Right now, this function only calculates cross-group rankings
 
     """
     curr_group_pos = ((df[demographic_col] == demographic_group) & (df[truth_col] == pos_class))

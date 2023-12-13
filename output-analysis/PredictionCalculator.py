@@ -4,7 +4,7 @@ Utility class for calculating and writing metrics for assessing models.
 
 import numpy as np
 import pandas as pd
-from sklearn.metrics import f1_score, matthews_corrcoef
+from sklearn.metrics import f1_score, matthews_corrcoef, confusion_matrix
 from typing import Dict, List, Any, Optional
 
 from metrics_utils import calc_all_metrics, calc_cross_group_metrics
@@ -51,7 +51,32 @@ class PredictionCalculator:
         self.metrics_df = pd.DataFrame( 
             columns=["true", "boot_mean", "boot_std", "lower_percentile", "upper_percentile", "boot_conf_level", "fold_n", "threshold_prob"]
         )
+
+    def test_normality(self, num_samples=1000, plot=False):
+        """ Test whether bootstrapping is actually getting me normally-distributed data
         
+        """
+        from scipy.stats import kstest
+        metrics = ['f1_micro', 'f1_macro', 'auroc', "recall_wrt_1"]
+        sample_metrics_accum = {
+            metric: [] for metric in metrics
+        }
+        results_dict = self.calc_metrics(self.results_df)
+        for _ in range(num_samples):
+            bootstrap_sample = self.create_bootstrap_sample(self.results_df)
+            sample_metrics = self.calc_metrics(bootstrap_sample)
+            for metric in metrics:
+                sample_metrics_accum[metric].append(sample_metrics[metric])
+        for metric in metrics:
+            true_mean = results_dict[metric]
+            stddev = np.std(sample_metrics_accum[metric])
+            if plot:
+                import matplotlib.pyplot as plt
+                plt.hist(sample_metrics_accum[metric], bins=int(num_samples/20))
+                plt.title(f"{metric} bootstrap distribution")
+                plt.show()
+            print(f"metric: {metric}")
+            print(kstest((np.array(sample_metrics_accum[metric]) - true_mean) / stddev, "norm"))
 
     def calc_metric_conf_ints(self, num_samples: int, conf_level: float=0.95):
         """ Calculate confidence intervals for each metric by bootstrapping 
@@ -66,6 +91,7 @@ class PredictionCalculator:
         # Compute metrics over everything 
         results_dict = self.calc_metrics(self.results_df)
         for metric_name, metric_value in results_dict.items():
+            # 'true' in the loc meaning that this is over the whole dataset, not bootstrapped
             self.metrics_df.loc[f'all::{metric_name}', 'true'] = metric_value
         
         for demographics_col in self.demographics_cols:
@@ -166,10 +192,13 @@ class PredictionCalculator:
         
         """
 
-    def calc_confusion_matrix(self, df: pd.DataFrame):
+    def calc_confusion_matrix(self, df: pd.DataFrame, threshold=None):
         """
         
         """
+        if threshold is None:
+            threshold = self.decision_threshold
+        return confusion_matrix(df[self.true_label_col], df[self.pred_probs_col].apply(lambda probs: probs[self.pos_label_ind]) > threshold)
 
     def _threshold_predictions(self):
         """ Check whether a threshold column or value exists; set them if they don't 
