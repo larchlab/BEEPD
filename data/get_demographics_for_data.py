@@ -18,7 +18,7 @@ def get_args() -> argparse.Namespace:
         argparse.Namespace: namespace containing the parsed args
     """
     parser = argparse.ArgumentParser()
-    parser.add_argument("--data-dir", type=str, required=True, help="Path to generated outcome prediction datasets")
+    # parser.add_argument("--data-dir", type=str, required=True, help="Path to generated outcome prediction datasets")
     parser.add_argument("--mimic-dir", type=str, required=True, help="Path to directory containing MIMIC-III files")
     parser.add_argument("--outfile", type=str, default=None, help="Path to CSV File to write, if desired")
     return parser.parse_args()
@@ -78,13 +78,13 @@ def create_hadm_id_to_demographics_sheet(hadm_ids: pd.Series, admission_info_tab
     """
     filtered = pd.merge(hadm_ids, admission_info_table, left_on="HADM_ID", right_on="HADM_ID", how="inner")
     filtered["AGE"] = filtered.apply(get_age, axis=1)
-    return filtered[["HADM_ID", "SUBJECT_ID", "AGE", "GENDER", "ETHNICITY", "LANGUAGE", "INSURANCE"]]
+    return filtered[["HADM_ID", "SUBJECT_ID", "AGE", "GENDER", "ETHNICITY", "LANGUAGE", "INSURANCE", "HOSPITAL_EXPIRE_FLAG"]]
 
 
 if __name__ == "__main__":
     # Get the location of the processed dataset and MIMIC data, write them to a file
     args = get_args()
-    data_dir = pathlib.Path(args.data_dir)
+    # data_dir = pathlib.Path(args.data_dir)
     mimic_dir = pathlib.Path(args.mimic_dir)
     outfile = pathlib.Path(args.outfile)
     # hadm_ids = get_hadm_ids(data_dir)

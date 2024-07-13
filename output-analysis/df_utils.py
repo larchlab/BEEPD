@@ -3,6 +3,10 @@
 """
 import pandas as pd
 from typing import Dict
+from os import getenv
+from pathlib import Path
+
+MIMIC_3_DIR = Path(getenv("MIMIC_3_DIR"))
 
 def stratify_df(df: pd.DataFrame, stratify_col: str) -> Dict[str, pd.DataFrame]:
     """ Create a dictionary mapping col=val strings to the input dataframe filtered as such

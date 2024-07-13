@@ -20,10 +20,15 @@ from transformers import AdamW, BertConfig, BertTokenizer, BertForSequenceClassi
         AutoTokenizer, AutoConfig, AutoModel, BertTokenizerFast, set_seed, get_linear_schedule_with_warmup
 from transformers.models.longformer.modeling_longformer import LongformerSelfAttention
 from outcome_models import BertLongForSequenceClassification, LitAugPredictorBienc, LitAugPredictorCrossenc, L2RLitAugPredictorBienc
-from outcome_pred_utils import CUDA_AVAILABLE, make_dict_vals_cuda_if_available, make_tensor_cuda_if_available
+from outcome_pred_utils import CUDA_AVAILABLE, MPS_AVAILABLE, make_dict_vals_cuda_if_available, make_tensor_cuda_if_available
 
+# TODO: update following line to handle MPS? Maybe 
 FloatTensorConstructor = torch.cuda.FloatTensor if CUDA_AVAILABLE else torch.FloatTensor
-MAP_LOCATION = None if CUDA_AVAILABLE else torch.device("cpu")
+MAP_LOCATION = torch.device("cpu")
+if CUDA_AVAILABLE:
+    MAP_LOCATION = torch.device('cuda')
+elif MPS_AVAILABLE:
+    MAP_LOCATION = torch.device('mps')
 
 def create_long_model(init_model, save_model_to, attention_window, max_pos, num_labels):
     config = BertConfig.from_pretrained(init_model,
@@ -51,7 +56,7 @@ def create_long_model(init_model, save_model_to, attention_window, max_pos, num_
         new_pos_embed[k:(k + step)] = model.bert.embeddings.position_embeddings.weight
         k += step
     model.bert.embeddings.position_embeddings.weight.data = new_pos_embed
-    model.bert.embeddings.position_ids.data = torch.tensor([i for i in range(max_pos)]).reshape(1, max_pos)
+    model.bert.embeddings.position_ids.data = torch.tensor([i for i in range(max_pos)], device=MAP_LOCATION).reshape(1, max_pos)
 
     # replace the `modeling_bert.BertSelfAttention` object with `LongformerSelfAttention`
     config.attention_window = [attention_window] * config.num_hidden_layers
@@ -74,7 +79,7 @@ def create_long_model(init_model, save_model_to, attention_window, max_pos, num_
 def train(model, train_data, dev_data, out_dir, epochs, lr, class_weights, acc_steps, strategy,
           use_warmup, warmup_steps, stop_on_roc, dump_test_preds):
     # print('Dropout default" {}'.format(model.config.hidden_dropout_prob))
-    weights = FloatTensorConstructor([x[1] for x in list(sorted(class_weights.items(), key=lambda x:x[0]))])
+    weights = torch.tensor([x[1] for x in list(sorted(class_weights.items(), key=lambda x:x[0]))], device=MAP_LOCATION)
     weighted_ce_loss = nn.CrossEntropyLoss(weight=weights)
     if 'vote' in strategy:
         weighted_ce_loss = nn.NLLLoss(weight=weights)
@@ -167,7 +172,7 @@ def test(model, dev_data, dump_test_preds, out_dir, epoch, step,
     with torch.no_grad():
         model.eval()
         unique_labels = list(class_weights.keys())
-        weights = FloatTensorConstructor([x[1] for x in list(sorted(class_weights.items(), key=lambda x:x[0]))])
+        weights = torch.tensor([x[1] for x in list(sorted(class_weights.items(), key=lambda x:x[0]))], device=MAP_LOCATION)
         weighted_ce_loss = nn.CrossEntropyLoss(weight=weights)
         if 'vote' in strategy:
             weighted_ce_loss = nn.NLLLoss(weight=weights)

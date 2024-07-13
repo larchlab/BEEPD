@@ -19,6 +19,10 @@ class EHRDataset:
         data = {}
         next(reader, None)
         for row in reader:
+            if row[2] == 'True':
+                row[2] = 1
+            elif row[2] == 'False':
+                row[2] = 0
             data[row[0]] = {'ehr': row[1], 'outcome': int(row[2])}
         len_data = len(data)
         ten_percent = int(0.1*len_data) 
